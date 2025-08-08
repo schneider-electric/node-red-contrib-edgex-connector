@@ -6,19 +6,18 @@ This node can be useful for integrating EdgeX data into Node-RED flows, enabling
 
 ## Installation
 
-You can search and install this node directly inside node-red using node-red palette(work in progress to add the node in node-red palette).
+You can search and install node-red-contrib-edgex-connector using node-red palette
 
-If node-red docker is used , then clone the directory, map the directory as a volume and exec
+Otherwise if node-red docker is used then
 
 ```bash
-docker exec -it <node-red container> npm install <mapped directory of node-red-contrib-edgex-connector>
+docker exec -it <node-red container> npm install node-red-contrib-edgex-connector
 ```
 
 If node-red is installed locally then do the following:
 
 ```bash
 cd ~/.node-red
-git clone https://github.com/schneider-electric/node-red-contrib-edgex-connector
 npm install node-red-contrib-edgex-connector
 ```
 
