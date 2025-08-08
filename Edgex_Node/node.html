@@ -1,0 +1,381 @@
+
+<!--
+    Copyright 2025 Schneider Electric
+
+    Licensed under the Apache License, Version 2.0 (the "License");
+    you may not use this file except in compliance with the License.
+    You may obtain a copy of the License at
+
+            http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing, software
+    distributed under the License is distributed on an "AS IS" BASIS,
+    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+    See the License for the specific language governing permissions and
+    limitations under the License.
+-->
+
+<script type="text/javascript">
+var deviceResourceMap = {}; // Global variable to store device resource map
+
+RED.nodes.registerType('Edgex_Node', {
+    category: 'edgex_node',
+    color: '#c49dd8',
+    defaults: {
+        name: {value:""},
+        selectDevice: {value:"", required:true},
+        selectReadWrite: {value:"", required:true},
+        selecteSourceswithrelativePos: {value:[], required:true}, // store selected sources in format ["GetSensorValues:0","Level:3"]
+        resolvedResources: {value:[], required:true}, // store resolved resources for runtime
+        outputs: {value:1, required:true}
+    },
+    inputs: 1,
+    outputs: 1,
+    icon: "icons/edgex.svg",
+    outputLabels: function(idx) {
+    if ((this.selectReadWrite === "Read" || this.selectReadWrite === "Subscribe") &&
+        this.resolvedResources &&
+        this.resolvedResources[idx]
+        ) {
+            return this.resolvedResources[idx];
+        }
+        return "";
+    }, 
+    inputLabels: function() {
+    if (this.selectReadWrite === "Write") {
+            return this.selecteSourceswithrelativePos[0].split(":")[0];
+        }
+        return "";
+    },  
+    label: function() {
+       // console.log("Selected device:", this.selectDevice); //For debugging
+        return this.name || this.selectDevice || "Edgex Node";
+    },
+    oneditprepare: function() {
+        var $device = $("#node-input-selectDevice");
+        var $sources = $("#node-input-selectSources");
+        var $rw = $("#node-input-selectReadWrite");
+        var node = this;  
+        var rwInitialized = false; 
+
+        // Fill sources dropdown, hiding RW in label
+        function refreshSources() {    
+            var dev = $device.val();
+            $sources.empty();
+            if (deviceResourceMap[dev]) {
+                Object.keys(deviceResourceMap[dev]).forEach(function(key) {
+                    let labelOnly = key.split(":")[0];
+                    $sources.append($("<option>").val(key).text(labelOnly));
+                    if (node.selectDevice === $device.val()) {
+                        // selecteSourceswithlenght contains entries like "Level:0", "GetSensorValues:1","Presure:4", try to match by source name
+                        (node.selecteSourceswithrelativePos || []).forEach(function(sel) {
+                            var selSourceName = sel.split(":")[0];
+                            if (labelOnly === selSourceName) {
+                                $sources.find('option[value="' + key + '"]').prop("selected", true);
+                            }
+                        });
+                    }
+                });
+            }            
+            $sources.trigger("change");
+        }
+
+        function refreshRW() {
+            var dev = $device.val();
+            var selected = $sources.val();
+            if (!Array.isArray(selected)) { //Normalize selected sources to array in case write is selected
+                selected = selected ? [selected] : [];
+            }
+            var rwSets = [];
+
+            // Gather RW options for each selected source
+            (selected || []).forEach(function(sel) {
+                // Extract RW from key (e.g., "GetSensorValues:RW" -> "RW")
+                var rw = (typeof sel === "string" && sel.indexOf(":") !== -1) ? sel.split(":")[1] : "";
+                var set = new Set();
+                if (rw.includes("R")) set.add("Read");
+                if (rw.includes("W")) set.add("Write");
+                if (rw.includes("R")) set.add("Subscribe"); // Subscribe always available with Read
+                rwSets.push(set);
+            });
+
+            // Compute intersection of all sets
+            let intersection = new Set(rwSets.length > 0 ? [...rwSets[0]] : []);
+            for (let i = 1; i < rwSets.length; i++) {
+                intersection = new Set([...intersection].filter(x => rwSets[i].has(x)));
+            }
+
+            let rwbckup = $rw.val(); // Backup current RW selection
+            $rw.empty();
+            intersection.forEach(function(rw) {
+                $rw.append($("<option>").val(rw).text(rw));
+            });  
+
+            // Inside your refreshRW or wherever the logic is called:
+            if (!rwInitialized) {
+                // Restore previous RW selection if available, otherwise auto-select if only one option
+                if (node.selectReadWrite) {
+                    $rw.val(node.selectReadWrite);
+                } else if ($rw.children().length === 1) {
+                    $rw.val($rw.children().first().val());
+                }
+                rwInitialized = true; // Mark as initialized so this block runs only once
+            } else {
+                // If the previous selection is not available, select the first option
+                if (!$rw.find('option[value="' + rwbckup + '"]').length) {
+                    $rw.val($rw.children().first().val());
+                } else {
+                    $rw.val(rwbckup);
+                }
+            }
+            if ($rw.val() === "Write") {
+                $sources.prop("multiple", false);
+                // If more than one is selected, keep only the first
+                var selected = $sources.val();
+                if (Array.isArray(selected) && selected.length > 1) {
+                    $sources.val(selected[0]);
+                }
+            } else {
+                $sources.prop("multiple", true);
+            }            
+        }
+
+        $.getJSON('/edgex/deviceResourceMap', function(resp) {
+            deviceResourceMap = resp;   
+
+            // Fill device dropdown
+            $device.empty();
+            for (const dev in deviceResourceMap) {
+                $device.append($("<option>").val(dev).text(dev));
+            }
+
+            // Restore previous device selection if available
+            if (node.selectDevice) {
+                $device.val(node.selectDevice);
+            }
+            $device.on("change", refreshSources);
+            $sources.on("change", refreshRW);
+            $rw.on("change", refreshRW);
+            $device.trigger("change");    
+                
+      }).fail(function(jqXHR, textStatus, errorThrown) {
+          console.error("Failed to load device resource map:", textStatus, errorThrown);
+          RED.notify("Failed to load device resource map. Please check your EdgeX configuration.", textStatus,errorThrown);
+          $device.empty().append($("<option>").text("Failed to load devices"));
+          $device.prop("disabled", false);          
+      });
+    },
+    oneditsave: function() {
+        var $device = $("#node-input-selectDevice");
+        var $sources = $("#node-input-selectSources");
+        var $rw = $("#node-input-selectReadWrite");
+        this.selectDevice = $device.val();
+        var dev = this.selectDevice; //Set the selected device
+        var selected = $sources.val();        
+        if (!Array.isArray(selected)) { //Normalize selected sources to array in case write is selected
+            selected = selected ? [selected] : [];
+        }
+        this.selectReadWrite = $rw.val();    
+        this.selecteSourceswithrelativePos = []; // Reset sources with relative position for new selection
+
+        var self = this; // Fix 'this' context for use in forEach
+
+        // Compute resolved resources for runtime (for labels)
+        var allResources = [];
+        var invalid = false;
+        
+        // Gather available RW options from selected sources
+        var pos =0;
+        (selected || []).forEach(function(sel) {
+            var arr = (deviceResourceMap[dev] && deviceResourceMap[dev][sel]) ? deviceResourceMap[dev][sel] : [];
+            allResources = allResources.concat(arr);
+            
+            // Update node.selectSources in format ["SourceName:count"]
+            let labelOnly = sel.split(":")[0];            
+            self.selecteSourceswithrelativePos.push(labelOnly + ":" + pos);
+            pos += arr.length; //Update the relative position    
+        }); 
+        this.resolvedResources = allResources; // resolvedResources are used for output labels 
+
+         if (this.selectReadWrite === "Write") {
+            this.outputs = 1;
+        } else {
+            this.outputs = this.resolvedResources.length || 1;
+        }
+    }
+});
+</script>
+
+<script type="text/html" data-template-name="Edgex_Node">
+    <div class="form-row">
+        <label for="node-input-name">
+            <i class="fa fa-tag" style="color:#6c3483;"></i>
+            <span style="font-weight:600;">Node Name</span>
+        </label>
+        <input type="text" id="node-input-name" placeholder="Enter node name" style="width: 70%; border-radius: 4px; border: 1px solid #c49dd8;">
+    </div>
+    <div class="form-row">
+        <label for="node-input-selectDevice" style="margin-bottom:4px;">
+            <i class="fa fa-microchip" style="color:#6c3483;"></i>
+            <span style="font-weight:600;">Device</span>
+        </label>
+        <select id="node-input-selectDevice" style="width: 70%; border-radius: 4px; border: 1px solid #c49dd8; margin-bottom:8px;"></select>
+        <label for="node-input-selectSources" style="margin-bottom:4px;">
+            <i class="fa fa-list" style="color:#6c3483;"></i>
+            <span style="font-weight:600;">Source(s)</span>
+        </label>
+        <select id="node-input-selectSources" multiple style="width: 70%; border-radius: 4px; border: 1px solid #c49dd8;"></select>
+    </div>
+    <div class="form-row">
+        <label for="node-input-selectReadWrite">
+            <i class="fa fa-exchange" style="color:#6c3483;"></i>
+            <span style="font-weight:600;">Operation</span>
+        </label>
+        <select id="node-input-selectReadWrite" style="width: 70%; border-radius: 4px; border: 1px solid #c49dd8;"></select>
+    </div>
+</script>
+
+<script type="text/html" data-help-name="Edgex_Node">
+    <h2 style="color:#6c3483;"><i class="fa fa-cube"></i> EdgeX Node Connector</h2>
+    <p>
+        <b>EdgeX Node Connector</b> enables seamless integration between <a href="https://github.com/edgexfoundry" target="_blank">EdgeX Foundry</a> devices/services and Node-RED flows. It supports <span style="color:#27ae60;"><b>Read</b></span>, <span style="color:#2980b9;"><b>Subscribe</b></span>, and <span style="color:#e67e22;"><b>Write</b></span> operations, including secure credential handling via EdgeX Vault.
+    </p>
+    <hr>
+    <h3 style="color:#6c3483;"><i class="fa fa-exchange"></i> Operation Modes</h3>
+    <ul>
+        <li>
+            <b style="color:#27ae60;">Read Mode:</b>
+            <ul>
+                <li>Fetches data from selected device resources.</li>
+                <li>Multiple sources can be selected; each output port maps to a resource.</li>
+                <li>If a <b>device command</b> is selected, all resources within the command are mapped to outputs.</li>
+                <li>Output labels display resource names.</li>
+                <li>Trigger via an inject node.</li>
+            </ul>
+        </li>
+        <li>
+            <b style="color:#2980b9;">Subscribe Mode:</b>
+            <ul>
+                <li>Listens for events from selected resources via EdgeX message bus (MQTT).</li>
+                <li>Device commands map all contained resources to outputs.</li>
+                <li>Output labels display resource names.</li>
+                <li>Trigger via an inject node.</li>
+            </ul>
+        </li>
+        <li>
+            <b style="color:#e67e22;">Write Mode:</b>
+            <ul>
+                <li>Only one source can be selected.</li>
+                <li>Input port label displays the resource name.</li>
+                <li>Expects <code>msg.payload</code> as a JSON object with resource names and values.</li>
+            </ul>
+        </li>
+    </ul>
+    <hr>
+    <h3 style="color:#6c3483;"><i class="fa fa-pencil"></i> Write Operation: Input Format</h3>
+    <ul>
+        <li>
+            <b>Input:</b>
+            <br>
+            <code>msg.payload</code> should be a JSON object where each key is a <b>resourceName</b> (from your device profile) and the value is the value to write.
+            <br>
+            <b>Example:</b>
+            <pre style="background:#f4f4f4; border-radius:4px; padding:8px;">
+msg.payload = {
+    "AHU-TargetTemperature": "28.5",
+    "AHU-TargetBand": "4.0"
+}
+            </pre>
+            See <a href="https://docs.edgexfoundry.org/3.2/api/core/Ch-APICoreCommand/#put-device-by-name" target="_blank">EdgeX Core Command API documentation</a> for details.
+        </li>
+        <li>
+            <b>Output:</b>
+            <br>
+            Contains the result of the write operation (EdgeX Core Command response).
+        </li>
+    </ul>
+    <hr>
+    <h3 style="color:#6c3483;"><i class="fa fa-docker"></i> Sample Docker Compose Service</h3>
+    <p>
+        Tested in Dockerized environments with EdgeX Foundry.<br>
+        See <a href="https://github.com/edgexfoundry/edgex-compose" target="_blank">edgex-compose</a> for setup instructions.
+    </p>
+    <pre style="background:#f4f4f4; border-radius:4px; padding:8px;">
+node-red:
+    image: nodered/node-red
+    environment:
+        TZ: Europe/Amsterdam
+        EDGEX_SECURITY_SECRET_STORE: "true"
+        SECRETSTORE_HOST: edgex-secret-store
+        SERVICE_HOST: node-red
+        CORE_COMMAND_HOST: edgex-core-command
+        CORE_METADATA_HOST: edgex-core-metadata
+        MESSAGEBUS_HOST: edgex-mqtt-broker
+        MESSAGEBUS_PORT: "1883"
+    ports:
+        - "1880:1880"
+    user: '1000:2001'
+    networks:
+        edgex-network: null
+    volumes:
+        - node-red-data:/data
+        - /tmp/edgex/secrets/node-red:/tmp/edgex/secrets/node-red:ro,z
+    </pre>
+    <hr>
+    <h3 style="color:#6c3483;"><i class="fa fa-cogs"></i> Required Environment Variables</h3>
+    <ul>
+        <li>
+            <b>Mandatory:</b> <code>SERVICE_HOST</code>, <code>CORE_COMMAND_HOST</code>, <code>CORE_METADATA_HOST</code>, <code>MESSAGEBUS_HOST</code>, and <code>MESSAGEBUS_PORT</code>.<br>
+            Defaults to <code>localhost</code> if not set (not suitable for Docker).
+        </li>
+        <li>
+            <code>SERVICE_HOST</code> and the secret volume path must match (e.g., <code>node-red</code>).
+        </li>
+        <li>
+            In secured mode (<code>EDGEX_SECURITY_SECRET_STORE=true</code>), the node fetches the secret token from EdgeX Vault.<br>
+            <code>SECRETSTORESETUP_HOST</code> is also mandatory.<br>
+            Token is stored at <code>/tmp/edgex/secrets/&lt;node-red-servicename&gt;/secrets-token.json</code> (read-only).
+            <br>
+            See <a href="https://docs.edgexfoundry.org/4.1/security/Ch-Configuring-Add-On-Services/#:~:text=simpler%20form%20of-,EDGEX_ADD_KNOWN_SECRETS,-environment%20variable%27s%20value" target="_blank">EdgeX Add-On Services Security</a>.
+        </li>
+    </ul>
+    <hr>
+    <h3 style="color:#6c3483;"><i class="fa fa-key"></i> Secret Volume Configuration</h3>
+    <ul>
+        <li>
+            Mount the secret token read-only from <code>/tmp/edgex/secrets/&lt;node-red-servicename&gt;</code>.
+        </li>
+        <li>
+            <code>&lt;node-red-servicename&gt;</code> must match <code>SERVICE_HOST</code>.
+        </li>
+    </ul>
+    <hr>
+    <h3 style="color:#6c3483;"><i class="fa fa-shield"></i> Security Notes</h3>
+    <ul>
+        <li>
+            The device resource endpoint is <b>not secured</b> currently.<br>
+            For Node-RED security, see <a href="https://nodered.org/docs/user-guide/runtime/securing-node-red" target="_blank">Node-RED Security Documentation</a>.
+        </li>
+        <li>
+            This node introduces a custom endpoint for retrieving device resource information, which is currently <b>not secured</b>. To mitigate this, it is recommended to enable global security for your Node-RED instance. Please refer to the <a href="https://nodered.org/docs/user-guide/runtime/securing-node-red" target="_blank">Node-RED Security Documentation</a> for guidance. Node-level security could also be implemented using a dedicated configuration node; however, this functionality is <b>not yet available</b>.
+
+When EdgeX is running in secured mode, the tokens in <code>/tmp/edgex/</code> are, by default, accessible only to the <code>edgex</code> user for security reasons. Running Node-RED as the <code>edgex</code> user may lead to permission issues with Node-RED files.
+
+A recommended workaround is to grant read access to the EdgeX group (GID 2001) for the Node-RED token. This requires root privileges. Execute the following commands:
+
+<pre style="background:#f4f4f4; border-radius:4px; padding:8px;">
+sudo chmod 750 /tmp/edgex/secrets/node-red/
+sudo chmod 640 /tmp/edgex/secrets/node-red/secrets-token.json
+</pre>
+
+Additionally, in your Docker Compose or Docker run configuration, set the user as <code>'1000:2001'</code>.
+
+In the future, a configuration node may be provided to allow token retrieval directly from the UI.
+
+This node has been tested only with Dockerized deployments of Node-RED and EdgeX.
+        </li>
+        <li>
+            Only tested with Dockerized Node-RED and EdgeX deployments.
+        </li>
+    </ul>
+</script>

@@ -1,0 +1,38 @@
+{
+  "name": "node-red-contrib-edgex-connector",
+  "version": "0.0.1",
+  "description": "A Node-RED node to access device data from EdgeX",
+  "author": {
+	"name": "Project Maintainer",
+	"email": "noreply@example.com"
+  },
+  "license": "Apache 2.0",
+  "keywords": [
+	"node-red",
+	"edgex",
+	"iot",
+	"edge-computing",
+	"device-data",
+	"nodered-node"
+  ],
+  "repository": {
+	"type": "git",
+	"url": "https://github.com/schneider-electric/node-red-contrib-edgex-connector"
+  },
+  "bugs": {
+	"url": "https://github.com/schneider-electric/node-red-contrib-edgex-connector"
+  },
+  "homepage": "https://github.com/schneider-electric/node-red-contrib-edgex-connector#readme",
+  "node-red": {
+	"nodes": {
+	  "Edgex_Node": "./Edgex_Node/node.js"
+	}
+  },
+  "dependencies": {
+	"axios": "latest",
+	"mqtt": "latest"
+  },
+  "engines": {
+	"node": ">=14.0.0"
+  }
+}
