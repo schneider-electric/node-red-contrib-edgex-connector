@@ -112,9 +112,10 @@ In the future, a configuration node may be provided to allow token retrieval dir
 
 This node has been tested only with Dockerized deployments of Node-RED and EdgeX.
 
-#### Demo
+#### Demo (new version contains improved UI and messages)
 
-![edgex_nodered](https://github.schneider-electric.com/SESA216434/node-red-contrib-edgex-connector/assets/8408/1f1e5bf4-82d1-4c50-b812-352bc7a70fd3)
+![1f1e5bf4-82d1-4c50-b812-352bc7a70fd3](https://github.com/user-attachments/assets/4c4518db-d36f-4dc5-830c-824ffa6d2e31)
+
 
 ## License
 This project is licensed under the Apache License 2.0 - see the LICENSE file for details.
