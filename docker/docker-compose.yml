@@ -1,0 +1,30 @@
+name: node-red-connector-edgex
+services:
+  node-red:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    environment:
+      TZ: Europe/Amsterdam
+      EDGEX_SECURITY_SECRET_STORE: "true"
+      SECRETSTORE_HOST: edgex-secret-store
+      SERVICE_HOST: node-red
+      CORE_COMMAND_HOST: edgex-core-command
+      CORE_METADATA_HOST: edgex-core-metadata
+      MESSAGEBUS_HOST: edgex-mqtt-broker
+      MESSAGEBUS_PORT: "1883"
+    ports:
+      - "1880:1880"
+    user: 1000:2001
+    networks:
+      edgex-network: null
+    volumes:
+      - node-red-data:/data
+      # - /tmp/edgex/secrets/node-red:/tmp/edgex/secrets/node-red:ro,z
+networks:
+  edgex-network:
+    name: edgex_edgex-network
+    driver: bridge
+volumes:
+  node-red-data:
+    name: edgex_node-red-data

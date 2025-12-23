@@ -1,0 +1,7 @@
+FROM nodered/node-red:4.1
+
+USER node-red
+
+WORKDIR /usr/src/node-red
+
+RUN npm install --no-update-notifier --no-fund ./node-red-contrib-edgex-connector

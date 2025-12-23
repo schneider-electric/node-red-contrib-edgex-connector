@@ -238,7 +238,7 @@ RED.nodes.registerType('Edgex_Node', {
 <script type="text/html" data-help-name="Edgex_Node">
     <h2 style="color:#6c3483;"><i class="fa fa-cube"></i> EdgeX Node Connector</h2>
     <p>
-        <b>EdgeX Node Connector</b> enables seamless integration between <a href="https://github.com/edgexfoundry" target="_blank">EdgeX Foundry</a> devices/services and Node-RED flows. It supports <span style="color:#27ae60;"><b>Read</b></span>, <span style="color:#2980b9;"><b>Subscribe</b></span>, and <span style="color:#e67e22;"><b>Write</b></span> operations, including secure credential handling via EdgeX Vault.
+        <b>EdgeX Node Connector</b> enables seamless integration between <a href="https://github.com/edgexfoundry" target="_blank">EdgeX Foundry</a> devices/services and Node-RED flows. It supports <span style="color:#27ae60;"><b>Read</b></span>, <span style="color:#2980b9;"><b>Subscribe</b></span>, and <span style="color:#e67e22;"><b>Write</b></span> operations, including secure credential handling via EdgeX secret store.
     </p>
     <hr>
     <h3 style="color:#6c3483;"><i class="fa fa-exchange"></i> Operation Modes</h3>
@@ -332,7 +332,7 @@ node-red:
             <code>SERVICE_HOST</code> and the secret volume path must match (e.g., <code>node-red</code>).
         </li>
         <li>
-            In secured mode (<code>EDGEX_SECURITY_SECRET_STORE=true</code>), the node fetches the secret token from EdgeX Vault.<br>
+            In secured mode (<code>EDGEX_SECURITY_SECRET_STORE=true</code>), the node fetches the secret token from EdgeX secret store.<br>
             <code>SECRETSTORESETUP_HOST</code> is also mandatory.<br>
             Token is stored at <code>/tmp/edgex/secrets/&lt;node-red-servicename&gt;/secrets-token.json</code> (read-only).
             <br>
